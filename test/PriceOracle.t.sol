@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity ^0.8.20;
 
-import "forge-std/Test.sol";
+import "@forge-std/Test.sol";
 import "../src/PriceOracle.sol";
 
 contract PriceOracleTest is Test {
