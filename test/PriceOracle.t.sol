@@ -32,7 +32,7 @@ contract PriceOracleTest is Test {
 
     function test_NonOwnerCannotSetTokenPriceInWETH() public {
         vm.startPrank(nonAdmin);
-        vm.expectRevert("Ownable: caller is not the owner");
+        vm.expectRevert(abi.encodeWithSignature("OwnableUnauthorizedAccount(address)", nonAdmin));
         // attempt to set oROR price as non-owner
         priceOracle.setTokenPriceInWETH(priceOracle.oROR(), 0.00001 * 10 ** 18);
         vm.stopPrank();
@@ -40,7 +40,7 @@ contract PriceOracleTest is Test {
 
     function test_NonOwnerCannotSetWETHPriceInUSD() public {
         vm.startPrank(nonAdmin);
-        vm.expectRevert("Ownable: caller is not the owner");
+        vm.expectRevert(abi.encodeWithSignature("OwnableUnauthorizedAccount(address)", nonAdmin));
         priceOracle.setWETHPriceInUSD(3000 * 10 ** 18);
         vm.stopPrank();
     }
