@@ -48,7 +48,7 @@ git pull origin main
 Install the dependency submodules using Forge:
 
 ```shell
-forge install --no-commit foundry-rs/forge-std openzeppelin/openzeppelin-contracts
+forge install --no-commit foundry-rs/forge-std openzeppelin/openzeppelin-contracts uniswap/v2-core uniswap v3-core uniswap v3-periphery
 ```
 
 The `foundry.toml` file is used to configure Foundry settings, manage RPC endpoints, and dependencies.
