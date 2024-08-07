@@ -1,0 +1,15 @@
+name: 'Check ABI File Naming'
+description: 'Ensures ABI files follow the naming convention: ContractName.abi.json'
+runs:
+  using: 'composite'
+  steps:
+    - name: Check ABI file naming
+      shell: bash
+      run: |
+        for FILE in $(find . -name "*.abi.json"); do
+          BASENAME=$(basename "$FILE")
+          if [[ ! $BASENAME =~ ^[A-Za-z0-9]+\.abi\.json$ ]]; then
+            echo "Error: ABI file '$BASENAME' does not follow the naming convention 'ContractName.abi.json'"
+            exit 1
+          fi
+        done
