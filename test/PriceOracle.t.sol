@@ -7,58 +7,41 @@ import "../src/PriceOracle.sol";
 contract PriceOracleTest is Test {
     PriceOracle private priceOracle;
     address private owner = address(0x123);
-    address private admin = address(0x456);
     address private nonAdmin = address(0x789);
 
     function setUp() public {
         vm.startPrank(owner);
         priceOracle = new PriceOracle();
-        priceOracle.addAdmin(admin);
         vm.stopPrank();
     }
 
-    function test_SetTokenPriceInWETHByAdmin() public {
-        vm.startPrank(admin);
+    function test_SetTokenPriceInWETHByOwner() public {
+        vm.startPrank(owner);
         // set oROR price to 0.00001 WETH
         priceOracle.setTokenPriceInWETH(priceOracle.oROR(), 0.00001 * 10 ** 18);
         assertEq(priceOracle.getValueInWETH(priceOracle.oROR()), 0.00001 * 10 ** 18);
         vm.stopPrank();
     }
 
-    function test_SetWETHPriceInUSDByAdmin() public {
-        vm.startPrank(admin);
+    function test_SetWETHPriceInUSDByOwner() public {
+        vm.startPrank(owner);
         priceOracle.setWETHPriceInUSD(3000 * 10 ** 18);
-
         assertEq(priceOracle.getValueInWETH(priceOracle.WETH()), 3000 * 10 ** 18);
         vm.stopPrank();
     }
 
-    function test_NonAdminCannotSetTokenPriceInWETH() public {
+    function test_NonOwnerCannotSetTokenPriceInWETH() public {
         vm.startPrank(nonAdmin);
-        vm.expectRevert("Caller is not an admin");
-        // attempt to set oROR price as non-admin
+        vm.expectRevert("Ownable: caller is not the owner");
+        // attempt to set oROR price as non-owner
         priceOracle.setTokenPriceInWETH(priceOracle.oROR(), 0.00001 * 10 ** 18);
         vm.stopPrank();
     }
 
-    function test_NonAdminCannotSetWETHPriceInUSD() public {
+    function test_NonOwnerCannotSetWETHPriceInUSD() public {
         vm.startPrank(nonAdmin);
-        vm.expectRevert("Caller is not an admin");
+        vm.expectRevert("Ownable: caller is not the owner");
         priceOracle.setWETHPriceInUSD(3000 * 10 ** 18);
-        vm.stopPrank();
-    }
-
-    function test_NonAdminCannotAddAdmin() public {
-        vm.startPrank(nonAdmin);
-        vm.expectRevert("Ownable: caller is not the owner");
-        priceOracle.addAdmin(nonAdmin);
-        vm.stopPrank();
-    }
-
-    function test_NonAdminCannotRemoveAdmin() public {
-        vm.startPrank(nonAdmin);
-        vm.expectRevert("Ownable: caller is not the owner");
-        priceOracle.removeAdmin(admin);
         vm.stopPrank();
     }
 }

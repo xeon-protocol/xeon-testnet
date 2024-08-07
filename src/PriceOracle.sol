@@ -19,12 +19,9 @@ contract PriceOracle is Ownable {
 
     //==================== MAPPINGS ====================//
     mapping(address => uint256) private tokenPrices;
-    mapping(address => bool) public admins;
 
     //===================== EVENTS =====================//
     event PriceUpdated(address indexed token, uint256 price);
-    event AdminAdded(address indexed admin);
-    event AdminRemoved(address indexed admin);
 
     //================== CONSTRUCTOR ==================//
     constructor() Ownable(msg.sender) {
@@ -35,23 +32,7 @@ contract PriceOracle is Ownable {
         tokenPrices[oROR] = 0;
     }
 
-    //================ MODIFIERS =================//
-    modifier onlyAdmin() {
-        require(admins[msg.sender], "Caller is not an admin");
-        _;
-    }
-
     //================ EXTERNAL FUNCTIONS ================//
-    function addAdmin(address admin) external onlyOwner {
-        admins[admin] = true;
-        emit AdminAdded(admin);
-    }
-
-    function removeAdmin(address admin) external onlyOwner {
-        admins[admin] = false;
-        emit AdminRemoved(admin);
-    }
-
     /**
      * @notice Sets the price of a token in WETH
      * @param token The address of the token
@@ -66,16 +47,12 @@ contract PriceOracle is Ownable {
      * @notice Sets the price of WETH in USD
      * @param priceInUSD The price of WETH in USD
      */
-    function setWETHPriceInUSD(uint256 priceInUSD) external onlyAdmin {
+    function setWETHPriceInUSD(uint256 priceInUSD) external onlyOwner {
         tokenPrices[WETH] = priceInUSD;
         emit PriceUpdated(WETH, priceInUSD);
     }
 
     //==================== GETTERS ====================//
-    function getAdminStatus(address admin) external view returns (bool) {
-        return admins[admin];
-    }
-
     function getValueInWETH(address token) external view returns (uint256) {
         return tokenPrices[token];
     }
