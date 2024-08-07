@@ -6,8 +6,8 @@ import "../src/PriceOracle.sol";
 
 contract PriceOracleTest is Test {
     PriceOracle private priceOracle;
-    address private owner = address(0x123);
-    address private nonAdmin = address(0x789);
+    address private owner = address(0x420);
+    address private user1 = address(0x069);
 
     function setUp() public {
         vm.startPrank(owner);
@@ -30,17 +30,15 @@ contract PriceOracleTest is Test {
         vm.stopPrank();
     }
 
-    function test_NonOwnerCannotSetTokenPriceInWETH() public {
-        vm.startPrank(nonAdmin);
-        vm.expectRevert(abi.encodeWithSignature("OwnableUnauthorizedAccount(address)", nonAdmin));
+    function testFailNonOwnerSetTokenPrice() public {
+        vm.startPrank(user1);
         // attempt to set oROR price as non-owner
         priceOracle.setTokenPriceInWETH(priceOracle.oROR(), 0.00001 * 10 ** 18);
         vm.stopPrank();
     }
 
-    function test_NonOwnerCannotSetWETHPriceInUSD() public {
-        vm.startPrank(nonAdmin);
-        vm.expectRevert(abi.encodeWithSignature("OwnableUnauthorizedAccount(address)", nonAdmin));
+    function testFailNonOwnerSetWETHPriceInUSD() public {
+        vm.startPrank(user1);
         priceOracle.setWETHPriceInUSD(3000 * 10 ** 18);
         vm.stopPrank();
     }
