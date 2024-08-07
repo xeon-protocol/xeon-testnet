@@ -37,7 +37,7 @@ contract PriceOracle is Ownable {
 
     //================ MODIFIERS =================//
     modifier onlyAdmin() {
-        require(admins[msg.sender] || owner() == msg.sender, "Caller is not an admin");
+        require(admins[msg.sender], "Caller is not an admin");
         _;
     }
 
@@ -57,7 +57,7 @@ contract PriceOracle is Ownable {
      * @param token The address of the token
      * @param priceInWETH The price of the token in WETH
      */
-    function setWETHPrice(address token, uint256 priceInWETH) external onlyAdmin {
+    function setTokenPriceInWETH(address token, uint256 priceInWETH) external onlyOwner {
         tokenPrices[token] = priceInWETH;
         emit PriceUpdated(token, priceInWETH);
     }
