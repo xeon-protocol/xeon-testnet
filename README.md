@@ -48,7 +48,7 @@ git pull origin main
 Install the dependency submodules using Forge:
 
 ```shell
-forge install --no-commit foundry-rs/forge-std openzeppelin/openzeppelin-contracts
+forge install --no-commit foundry-rs/forge-std openzeppelin/openzeppelin-contracts uniswap/v2-core uniswap v3-core uniswap v3-periphery
 ```
 
 The `foundry.toml` file is used to configure Foundry settings, manage RPC endpoints, and dependencies.
@@ -139,7 +139,7 @@ Then run the `forge script` command without the private key arg.
 
 ## Contributing
 
-[![PRs Closed](https://img.shields.io/badge/PRs-closed-darkgreen.svg)]
+![PRs Open](https://img.shields.io/badge/PRs-open-darkgreen.svg)
 
 If you are an Solidity developer and are interested in auditing our `v1-core` contracts, you can submit an audit by using the form [here](https://github.com/xeon-protocol/xeon-dapp/issues/new?assignees=heyJonBray%2C+wellytg%2C+neonhedge&labels=type%3A+audit%2C+status%3A+discussing&projects=&template=04-audit-submission.md&title=xeon-xeon-v1+audit+%5BMM-DD-YYYY%5D-%5ByourName%5D).
 
