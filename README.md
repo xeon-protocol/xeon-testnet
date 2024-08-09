@@ -4,7 +4,7 @@
 
 [![xeon token](https://img.shields.io/badge/$XEON-0x8d65a2eaBDE4B31cbD7E43F27E47559d1CCec86c-8429c6.svg?logo=ethereum)](https://app.uniswap.org/explore/tokens/ethereum/0x8d65a2eabde4b31cbd7e43f27e47559d1ccec86c?chain=mainnet)
 
-This repository contains the utility contracts for Xeon Protocol testnet including tests, and scripts. For the frontend, see the [xeon-dapp](https://github.com/xeon-protocol/xeon-dapp) repository.
+This repository contains the core and utility contracts for Xeon Protocol testnet including tests, and scripts. For the frontend, see [xeon-dapp](https://github.com/xeon-protocol/xeon-dapp). You can find the latest mainnet contracts on our [v1-core](https://github.com/xeon-protocol/v1-core) repo.
 
 ### Follow Us
 
@@ -51,7 +51,7 @@ Install the dependency submodules using Forge:
 forge install --no-commit foundry-rs/forge-std openzeppelin/openzeppelin-contracts uniswap/v2-core uniswap v3-core uniswap v3-periphery
 ```
 
-The `foundry.toml` file is used to configure Foundry settings, manage RPC endpoints, and dependencies.
+The `foundry.toml` file is used to configure Foundry settings, manage RPC endpoints, dependencies, and remappings.
 
 ---
 
