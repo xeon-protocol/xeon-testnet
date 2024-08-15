@@ -3,13 +3,13 @@ pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 
-/*
+/**
  * @title Xeon Price Oracle (Testnet)
  * @author Jon Bray <jon@xeon-protocol.io>
  * @notice this is a testnet price oracle that allows for manual price changes
  */
 contract PriceOracle is Ownable {
-    //==================== STATE VARIABLES ====================//
+    //=============== STATE VARIABLES ===============//
     address public constant oVELA = 0xb7E16D46f26B1615Dcc501931F28F07fD4b0D7F4;
     address public constant oPEPE = 0x7dC9ecE25dcCA41D8a627cb47ded4a9322f7722b;
     address public constant oDEGEN = 0x9B9852A943a570685c3704d70C4F1ebD5EdE109B;
@@ -17,13 +17,13 @@ contract PriceOracle is Ownable {
     address public constant oROR = 0xEb2DCAFFFf1b0d5BA76F14Fe6bB8348126339FcB;
     address public constant WETH = 0x395cB7753B02A15ed1C099DFc36bF00171F18218;
 
-    //==================== MAPPINGS ====================//
+    //=============== MAPPINGS ===============//
     mapping(address => uint256) private tokenPrices;
 
-    //===================== EVENTS =====================//
+    //=============== EVENTS ===============//
     event PriceUpdated(address indexed token, uint256 price);
 
-    //================== CONSTRUCTOR ==================//
+    //=============== CONSTRUCTOR ===============//
     constructor() Ownable(msg.sender) {
         tokenPrices[oVELA] = 0;
         tokenPrices[oPEPE] = 0;
@@ -32,7 +32,7 @@ contract PriceOracle is Ownable {
         tokenPrices[oROR] = 0;
     }
 
-    //================ EXTERNAL FUNCTIONS ================//
+    //=============== EXTERNAL FUNCTIONS ===============//
     /**
      * @notice Sets the price of a token in WETH
      * @param token The address of the token
@@ -52,7 +52,7 @@ contract PriceOracle is Ownable {
         emit PriceUpdated(WETH, priceInUSD);
     }
 
-    //==================== GETTERS ====================//
+    //=============== GETTERS ===============//
     function getValueInWETH(address token) external view returns (uint256) {
         return tokenPrices[token];
     }
