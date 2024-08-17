@@ -1,15 +1,26 @@
 // SPDX-License-Identifier: GPL-3.0
-pragma solidity 0.8.0;
+pragma solidity 0.8.20;
 
+/**
+ * @title XeonBookmarking Contract
+ * @author Jon Bray <jon@xeon-protocol.io>
+ * @dev This contract allows users to bookmark hedging options.
+ * It provides functions to toggle bookmarks, check bookmark status,
+ * and retrieve all bookmarks for a user.
+ */
 contract XeonBookmarking {
     //=============== MAPPINGS ===============//
-    mapping(address => mapping(uint256 => bool)) public bookmarks;
-    mapping(address => uint256[]) public bookmarkedOptions;
+    // Mapping to store bookmark status by user and deal ID
+    mapping(address => mapping(uint256 => bool)) internal bookmarks;
+
+    // Mapping to store all bookmarked deal IDs for a user
+    mapping(address => uint256[]) internal bookmarkedOptions;
 
     //=============== EVENTS ===============//
     event BookmarkToggle(address indexed user, uint256 hedgeId, bool bookmarked);
 
     //=============== FUNCTIONS ===============//
+
     /**
      * @notice Toggles the bookmark status of a hedging option using its ID.
      *
@@ -22,6 +33,7 @@ contract XeonBookmarking {
         bool bookmarked = bookmarks[msg.sender][_dealID];
         bookmarks[msg.sender][_dealID] = !bookmarked;
         emit BookmarkToggle(msg.sender, _dealID, !bookmarked);
+
         // Update bookmarkedOptions array for wallet
         if (!bookmarked) {
             bookmarkedOptions[msg.sender].push(_dealID);
@@ -29,7 +41,6 @@ contract XeonBookmarking {
             uint256[] storage options = bookmarkedOptions[msg.sender];
             for (uint256 i = 0; i < options.length; i++) {
                 if (options[i] == _dealID) {
-                    // When values match, remove the dealId from array
                     if (i < options.length - 1) {
                         options[i] = options[options.length - 1];
                     }

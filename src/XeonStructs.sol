@@ -6,7 +6,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 /**
  * @title XeonStructs Library
  * @author Jon Bray <jon@xeon-protocol.io>
- * @notice this is a library of structs used throughout Xeon Protocol
+ * @dev this is a library of structs used throughout Xeon Protocol
  */
 library XeonStructs {
     /**
@@ -83,7 +83,7 @@ library XeonStructs {
     /**
      * @dev Tracks a user's profit and loss for a specific pair.
      */
-    struct UserPL {
+    struct UserPnL {
         uint256 profits;
         uint256 losses;
     }
@@ -99,6 +99,16 @@ library XeonStructs {
         uint256 acceptTime;
         uint256 rejectTime;
         uint256 state; // 0 - requested, 1 accepted, 2 rejected
+    }
+
+    /**
+     * @dev Contains protocol analytics for profits and fees.
+     */
+    struct ProtocolAnalytics {
+        uint256 profitsTokens;
+        uint256 pairProfits;
+        uint256 feesTokens;
+        uint256 pairedFees;
     }
 
     /**
