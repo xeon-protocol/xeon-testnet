@@ -4,73 +4,87 @@ pragma solidity 0.8.20;
 /**
  * @title XeonBookmarking Contract
  * @author Jon Bray <jon@xeon-protocol.io>
- * @dev This contract allows users to bookmark hedging options.
- * It provides functions to toggle bookmarks, check bookmark status,
- * and retrieve all bookmarks for a user.
+ * @dev this contract allows users to bookmark hedging options
+ * it provides functions to toggle bookmarks, check bookmark status,
+ * and retrieve all bookmarks for a user
  */
 contract XeonBookmarking {
     //=============== MAPPINGS ===============//
-    // Mapping to store bookmark status by user and deal ID
+    // mapping of bookmark status by user and dealId
     mapping(address => mapping(uint256 => bool)) internal bookmarks;
-
-    // Mapping to store all bookmarked deal IDs for a user
+    // mapping of bookmark index by user and dealId
+    mapping(address => mapping(uint256 => uint256)) internal bookmarkIndex;
+    // mapping of bookmarks for a user by dealId
     mapping(address => uint256[]) internal bookmarkedOptions;
 
     //=============== EVENTS ===============//
-    event BookmarkToggle(address indexed user, uint256 hedgeId, bool bookmarked);
+    event BookmarkAdded(address indexed user, uint256 hedgeId);
+    event BookmarkRemoved(address indexed user, uint256 hedgeId);
 
     //=============== FUNCTIONS ===============//
 
     /**
-     * @notice Toggles the bookmark status of a hedging option using its ID.
+     * @notice add bookmark for a hedging option using dealId
      *
-     * This function toggles the bookmark status of a hedging option based on its ID for the caller.
-     * It emits an event indicating the toggle action.
+     * this function adds a bookmark for a hedging option based on its dealId for the caller
+     * emits an event indicating the bookmark was added
      *
-     * @param _dealID The unique identifier of the hedging option.
+     * @param _dealId unique identifier of the hedging option
      */
-    function bookmarkHedge(uint256 _dealID) external {
-        bool bookmarked = bookmarks[msg.sender][_dealID];
-        bookmarks[msg.sender][_dealID] = !bookmarked;
-        emit BookmarkToggle(msg.sender, _dealID, !bookmarked);
+    function addBookmark(uint256 _dealId) external {
+        require(!bookmarks[msg.sender][_dealId], "Bookmark already exists");
 
-        // Update bookmarkedOptions array for wallet
-        if (!bookmarked) {
-            bookmarkedOptions[msg.sender].push(_dealID);
-        } else {
-            uint256[] storage options = bookmarkedOptions[msg.sender];
-            for (uint256 i = 0; i < options.length; i++) {
-                if (options[i] == _dealID) {
-                    if (i < options.length - 1) {
-                        options[i] = options[options.length - 1];
-                    }
-                    options.pop();
-                    break;
-                }
-            }
-        }
+        // Add the bookmark
+        bookmarkedOptions[msg.sender].push(_dealId);
+        bookmarks[msg.sender][_dealId] = true;
+        bookmarkIndex[msg.sender][_dealId] = bookmarkedOptions[msg.sender].length - 1;
+
+        emit BookmarkAdded(msg.sender, _dealId);
     }
 
     /**
-     * @notice Gets the bookmark status of a hedging option for a specific user.
+     * @notice removes a bookmark for a hedging option using its ID
      *
-     * This function retrieves the bookmark status of a hedging option for a specific user.
+     * this function removes a bookmark for a hedging option based on its dealId for the caller
+     * emits an event indicating the bookmark was removed
      *
-     * @param user The address of the user.
-     * @param _dealID The unique identifier of the hedging option.
-     * @return The bookmark status.
+     * @param _dealId unique identifier of the hedging option
      */
-    function getBookmark(address user, uint256 _dealID) public view returns (bool) {
-        return bookmarks[user][_dealID];
+    function removeBookmark(uint256 _dealId) external {
+        require(bookmarks[msg.sender][_dealId], "Bookmark does not exist");
+
+        // Remove the bookmark
+        uint256 index = bookmarkIndex[msg.sender][_dealId];
+        uint256 lastIndex = bookmarkedOptions[msg.sender].length - 1;
+        uint256 lastDealId = bookmarkedOptions[msg.sender][lastIndex];
+
+        // Swap and pop
+        bookmarkedOptions[msg.sender][index] = lastDealId;
+        bookmarkIndex[msg.sender][lastDealId] = index;
+
+        bookmarkedOptions[msg.sender].pop();
+        delete bookmarks[msg.sender][_dealId];
+        delete bookmarkIndex[msg.sender][_dealId];
+
+        emit BookmarkRemoved(msg.sender, _dealId);
     }
 
     /**
-     * @notice Gets all bookmarks of a user.
+     * @notice get the bookmark status of a hedging option for a specific user.
      *
-     * This function retrieves all bookmarks of a user.
+     * @param user address of the user
+     * @param _dealId unique identifier of the hedging option
+     * @return bookmark status
+     */
+    function getBookmark(address user, uint256 _dealId) public view returns (bool) {
+        return bookmarks[user][_dealId];
+    }
+
+    /**
+     * @notice get all bookmarks of a user
      *
-     * @param user The address of the user.
-     * @return An array containing all bookmarked hedging option IDs.
+     * @param user address of the user.
+     * @return array containing all bookmarked hedging option IDs
      */
     function getUserBookmarks(address user) public view returns (uint256[] memory) {
         return bookmarkedOptions[user];
