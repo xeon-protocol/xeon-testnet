@@ -11,7 +11,7 @@ import "./XeonStructs.sol";
 contract XeonStorage {
     using XeonStructs for XeonStructs.UserBalance;
     using XeonStructs for XeonStructs.HedgingOption;
-
+    /* todo: declare virtual variables as needed */
     //=============== STATE VARIABLES ===============//
 
     uint256[] internal optionsCreated;

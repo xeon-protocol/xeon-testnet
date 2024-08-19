@@ -4,8 +4,6 @@ pragma solidity 0.8.20;
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "@uniswap/v2-core/contracts/interfaces/IUniswapV2Factory.sol";
-import "@uniswap/v3-core/contracts/interfaces/IUinswapV3Factory.sol";
 import "./PriceOracle.sol";
 import "./XeonFeeManagement.sol";
 import "./XeonStorage.sol";
@@ -33,6 +31,31 @@ interface IXeonStaking {
  * @notice this is a testnet version of XeonHedging and should not be used in production
  */
 contract XeonHedging_Test_V2 is Ownable, ReentrancyGuard {
+    /**
+     * todo: simplify underlying value calcs
+     * change ALL underlying value references to use WETH
+     * and rename to generic "underlyingValue" where possible
+     * need to start from basics
+     */
+
+    /**
+     * todo: break up hedging logic
+     * instead of treating all hedges as one, have a separate
+     * function for put/call/swap
+     *
+     * use structs only for what's common among all of them
+     * use local variables for everything else
+     */
+
+    /**
+     * how did you know I thought the contract was so complicated?
+     * because it's so complex due to all the mappings and events
+     * functions are all over the place but even worse, they're all
+     * in the same place and they're all in the same file so here's
+     * what we need to do:
+     * - get rid of all the mappings
+     *
+     */
     using SafeERC20 for IERC20;
 
     bool private isExecuting;
@@ -41,8 +64,6 @@ contract XeonHedging_Test_V2 is Ownable, ReentrancyGuard {
     // core addresses
     address public priceOracle;
     IXeonStaking public stakingContract;
-    IUniswapV2Factory public uniswapV2Factory;
-    IUniswapV3Factory public uniswapV3Factory;
 
     address public xeonAddress;
     address public stakingAddress;
