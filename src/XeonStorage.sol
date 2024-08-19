@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.20;
 
 import "./XeonStructs.sol";
@@ -12,6 +12,11 @@ contract XeonStorage {
     using XeonStructs for XeonStructs.UserBalance;
     using XeonStructs for XeonStructs.HedgingOption;
     /* todo: declare virtual variables as needed */
+    // update visibility through codebase
+    // private - only callable from inside contract
+    // internal - callable inside contract + child contracts
+    // public - callable inside + outside contract
+    // external - only callable from outside contract
     //=============== STATE VARIABLES ===============//
 
     uint256[] internal optionsCreated;

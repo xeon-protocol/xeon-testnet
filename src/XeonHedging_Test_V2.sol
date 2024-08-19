@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0
+// SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.20;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
@@ -14,8 +14,6 @@ interface IPriceOracle {
     function setTokenPriceInWETH(address token, uint256 priceInWETH) external;
     function setWETHPriceInUSD(uint256 priceInUSD) external;
 }
-
-pragma solidity 0.8.20;
 
 interface IXeonStaking {
     function getAssignedAndUnassignedAmounts(address _addr)
@@ -124,6 +122,11 @@ contract XeonHedging_Test_V2 is Ownable, ReentrancyGuard {
     }
 
     //=============== SETTERS ===============//
+
+    /* todo: be able to update and set: */
+    // - PriceOracle
+    // - XeonStaking
+    // - ensure updating admin/owner works
 
     //=============== GETTERS ===============//
     // hack: workaround for getting token decimals through IERC20 interface
