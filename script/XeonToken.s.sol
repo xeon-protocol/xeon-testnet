@@ -5,6 +5,9 @@ import {Script, console2} from "@forge-std/Script.sol";
 import {XeonToken} from "../src/XeonToken.sol";
 import {XeonTokenDistributor} from "../src/XeonTokenDistributor.sol";
 
+// base sepolia
+// simulate: forge script script/XeonToken.s.sol:XeonTokenScript --rpc-url $BASE_SEPOLIA_RPC_URL --chain-id 84532 -vvvv
+// broadcast: forge script script/XeonToken.s.sol:XeonTokenScript --rpc-url $BASE_SEPOLIA_RPC_URL --chain-id 84532 -vv --broadcast --verify
 contract XeonTokenScript is Script {
     address public deployer = 0x56557c3266d11541c2D939BF6C05BFD29e881e55;
 
