@@ -4,7 +4,7 @@ pragma solidity 0.8.20;
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
-contract XeonFeeManagement is Ownable, ReentrancyGuard {
+contract XeonFeeManagement is Ownable(msg.sender), ReentrancyGuard {
     //=============== STATE VARIABLES ===============//
     uint256 public feeNumerator;
     uint256 public feeDenominator;

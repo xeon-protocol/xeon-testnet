@@ -495,6 +495,7 @@ contract XeonHedging_Test_V2 is Ownable, ReentrancyGuard {
     }
 
     /**
+     * todo: incorporate into vault logic
      * @dev Transfers collected fees from the protocol to a specified wallet address.
      * This function debits the protocol's user balance map and credits the recipient's user balance map.
      *
