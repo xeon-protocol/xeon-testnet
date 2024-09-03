@@ -20,33 +20,38 @@ contract XeonStakingPool is ERC20, Ownable {
     using SafeERC20 for IERC20;
 
     //========== ADDRESS VARIABLES ==========//
-    IERC20 public immutable XEON; // XEON token address
-    IWETH public immutable WETH; // WETH token address
-    address public teamAddress; // Protocol/team multisig address
-    address public constant buybackDestination = teamAddress; // Buyback destination
+    IERC20 public immutable XEON;
+    IWETH public immutable WETH;
+    address public teamAddress;
+    // destination for XEON tokens bought through the pool
+    address public constant buybackDestination = teamAddress;
 
     IUniswapV2Router02 public immutable uniswapV2Router; // Uniswap V2 Router
     ISwapRouter public immutable uniswapV3Router; // Uniswap V3 Router
 
     //========== EPOCH CONSTANTS ==========//
-    uint256 public epoch = 1; // Current epoch
+    uint256 public epoch = 1; // skip epoch 0
     uint256 public constant EPOCH_DURATION = 3 days;
     uint256 public constant UNLOCK_PERIOD = 2 days;
     uint256 public nextEpochStart;
     bool public isPoolLocked;
 
     //========== REWARD DISTRIBUTION CONSTANTS ==========//
-    uint256 public teamPercentage = 5; // Percentage of WETH rewards to the team
-    uint256 public constant buyBackPercentage = 5; // Percentage of WETH for buybacks
+    // percentage of rewards paid to the team
+    uint256 public teamPercentage = 5;
+    // percentage of rewards used to buyback XEON
+    uint256 public constant buyBackPercentage = 5;
 
     //========== MAPPINGS ==========//
-    mapping(address => uint256) public stakedAmounts; // Amount of XEON staked by users
-    mapping(address => uint256) public stakerPercentage; // Percentage of pool owned by each staker
+    // total amount of XEON staked by users
+    mapping(address => uint256) public stakedAmounts;
+    // percentage of the pool owned by each staker
+    mapping(address => uint256) public stakerPercentage;
 
     //========== VOTING VARIABLES==========//
     mapping(address => uint256) public votes;
-    uint256 public totalVotes; // total votes cast
-    uint256 public totalWeight; // total weight of votes
+    // sum of all weighted votes
+    uint256 public totalVotes;
 
     //========== EVENTS ==========//
     event Staked(address indexed user, uint256 amount);
@@ -257,7 +262,7 @@ contract XeonStakingPool is ERC20, Ownable {
         uint256 totalStaked = totalSupply();
         uint256 weightedVote = (percentage * stakedBalance) / totalStaked;
 
-        // Remove the user's previous vote from the total votes
+        // remove the user's previous vote from the total votes, if any
         if (votes[msg.sender] > 0) {
             totalVotes -= votes[msg.sender];
         }
@@ -290,15 +295,32 @@ contract XeonStakingPool is ERC20, Ownable {
      */
     function _calculateNewBuybackPercentage() internal {
         uint256 totalStaked = totalSupply();
-        if (totalStaked > 0) {
-            // calculate the weighted average of the votes
-            uint256 weightedAverage = (totalVotes * 100) / totalStaked;
+        uint256 totalWeightedVotes;
 
-            // dampen adjustment with previous buyback percentage
-            buyBackPercentage = (weightedAverage + buyBackPercentage) / 2;
+        for (uint256 i = 0; i < stakers.length; i++) {
+            address staker = stakers[i];
+            uint256 stakedBalance = balanceOf(staker);
+
+            uint256 weightedVote;
+            if (votes[staker] > 0) {
+                weightedVote = votes[staker];
+            } else {
+                // Default vote value is the current buyBackPercentage + 10
+                uint256 defaultVoteValue = buyBackPercentage + 10;
+                // Ensure the default vote does not exceed 100%
+                if (defaultVoteValue > 100) {
+                    defaultVoteValue = 100;
+                }
+                weightedVote = (defaultVoteValue * stakedBalance) / totalStaked;
+            }
+            totalWeightedVotes += weightedVote;
         }
 
-        // Reset voting data for the next epoch
+        // Calculate the new buyback percentage
+        uint256 weightedAverage = totalWeightedVotes / totalStaked;
+        buyBackPercentage = (weightedAverage + buyBackPercentage) / 2;
+
+        // Reset votes for the next epoch
         totalVotes = 0;
         for (uint256 i = 0; i < stakers.length; i++) {
             votes[stakers[i]] = 0;
