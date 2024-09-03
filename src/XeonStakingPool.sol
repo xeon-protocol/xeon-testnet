@@ -31,8 +31,9 @@ contract XeonStakingPool is ERC20, Ownable {
 
     //========== EPOCH CONSTANTS ==========//
     uint256 public epoch = 1; // skip epoch 0
-    uint256 public constant EPOCH_DURATION = 3 days;
-    uint256 public constant UNLOCK_PERIOD = 2 days;
+    /* todo: update constants for mainnet */
+    uint256 public constant EPOCH_DURATION = 3 days; // mainnet: 30 days
+    uint256 public constant UNLOCK_PERIOD = 2 days; // mainnet: 3 days
     uint256 public nextEpochStart;
     bool public isPoolLocked;
 
@@ -63,12 +64,12 @@ contract XeonStakingPool is ERC20, Ownable {
     event TeamPercentageUpdated(uint256 newPercentage);
 
     /**
-     * @notice Constructor to initialize the staking pool
-     * @param _XEON The address of the XEON token
-     * @param _WETH The address of the WETH token
-     * @param _uniswapV2Router The address of the Uniswap V2 Router
-     * @param _uniswapV3Router The address of the Uniswap V3 Router
-     * @param _teamAddress The address of the protocol/team multisig
+     * @notice constructor to initialize the staking pool
+     * @param _XEON address of XEON token
+     * @param _WETH address of WETH token
+     * @param _uniswapV2Router address of the Uniswap V2 Router
+     * @param _uniswapV3Router address of the Uniswap V3 Router
+     * @param _teamAddress address of the team ecosystem multisig
      */
     constructor(
         IERC20 _XEON,
@@ -89,8 +90,21 @@ contract XeonStakingPool is ERC20, Ownable {
 
     //========== MODIFIERS ==========//
 
+    // ensure caller is staker
     modifier isStaker() {
         require(balanceOf(msg.sender) > 0, "Address is not a staker");
+        _;
+    }
+
+    // ensure pool is unlocked
+    modifier whenUnlocked() {
+        require(!isPoolLocked, "Staking/Unstaking is locked during the staking period.");
+        _;
+    }
+
+    // ensure pool is locked
+    modifier whenLocked() {
+        require(isPoolLocked, "Cannot perform this action while the pool is unlocked.");
         _;
     }
 
@@ -107,8 +121,7 @@ contract XeonStakingPool is ERC20, Ownable {
      * @notice Stake XEON tokens into the pool
      * @param amount The amount of XEON tokens to stake
      */
-    function stake(uint256 amount) external {
-        require(!isPoolLocked, "Staking is locked");
+    function stake(uint256 amount) external whenUnlocked {
         require(amount > 0, "Cannot stake 0 tokens");
 
         XEON.safeTransferFrom(msg.sender, address(this), amount);
@@ -127,8 +140,7 @@ contract XeonStakingPool is ERC20, Ownable {
      * @dev Tokens can only be unstaked when the pool is unlocked.
      * @param amount The amount of XEON tokens to unstake
      */
-    function unstake(uint256 amount) external isStaker {
-        require(!isPoolLocked, "Unstaking is locked");
+    function unstake(uint256 amount) external whenUnlocked isStaker {
         require(amount > 0, "Cannot unstake 0 tokens");
         require(balanceOf(msg.sender) >= amount, "Insufficient staked balance");
 
@@ -162,26 +174,31 @@ contract XeonStakingPool is ERC20, Ownable {
      * @dev Internal function to lock the pool and start a new epoch.
      * when locking the pool, the buyback percentage is recalculated.
      */
-    function _lockPool() internal {
+    function _lockPool() internal whenUnlocked {
         isPoolLocked = true;
-        epoch++;
 
         // calculate the new buyback percentage
         _calculateNewBuybackPercentage();
 
-        nextEpochStart = block.timestamp + EPOCH_DURATION;
+        // next epoch starts after this epoch and next unlock period
+        nextEpochStart = block.timestamp + EPOCH_DURATION + UNLOCK_PERIOD;
+        epoch++;
+
         emit PoolLocked(epoch, block.timestamp);
     }
 
     /**
      * @dev Internal function to unlock the pool
      */
-    function _unlockPool() internal {
+    function _unlockPool() internal whenLocked {
         isPoolLocked = false;
+
+        // next epoch starts after this current unlock period
         nextEpochStart = block.timestamp + UNLOCK_PERIOD;
 
-        autoWithdrawRewards(); // distribute rewards
-        _swapWETHForXEON(); // swap WETH to XEON
+        // distribute rewards and buyback XEON
+        autoWithdrawRewards();
+        _swapWETHForXEON();
 
         emit PoolUnlocked(epoch, block.timestamp);
     }
