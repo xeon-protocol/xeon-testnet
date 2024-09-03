@@ -44,16 +44,6 @@ contract XeonHedging_Test_V2 is Ownable, ReentrancyGuard {
      * use structs only for what's common among all of them
      * use local variables for everything else
      */
-
-    /**
-     * how did you know I thought the contract was so complicated?
-     * because it's so complex due to all the mappings and events
-     * functions are all over the place but even worse, they're all
-     * in the same place and they're all in the same file so here's
-     * what we need to do:
-     * - get rid of all the mappings
-     *
-     */
     using SafeERC20 for IERC20;
 
     bool private isExecuting;
