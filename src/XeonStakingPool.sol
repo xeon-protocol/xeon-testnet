@@ -242,6 +242,32 @@ contract XeonStakingPool is ERC20, Ownable {
         }
     }
 
+    /**
+     * @dev Internal function to swap WETH for XEON and send to team address
+     */
+    function _swapWETHForXEON() internal {
+        uint256 totalWETH = WETH.balanceOf(address(this));
+        uint256 amountToSwap = (totalWETH * buyBackPercentage) / 100;
+
+        // Approve the Uniswap router to spend WETH
+        WETH.approve(address(uniswapV2Router), amountToSwap);
+
+        address;
+        path[0] = address(WETH);
+        path[1] = address(XEON);
+
+        // Swap WETH for XEON
+        uint256[] memory amounts = uniswapV2Router.swapExactTokensForTokens(
+            amountToSwap,
+            0, // Accept any amount of XEON
+            path,
+            teamAddress,
+            block.timestamp
+        );
+
+        emit TokenSwapped(address(WETH), amountToSwap, amounts[1]);
+    }
+
     //========== OWNER FUNCTIONS ==========//
 
     /**
