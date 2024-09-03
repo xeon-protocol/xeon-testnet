@@ -21,6 +21,12 @@ interface IPriceOracle {
     function setWETHPriceInUSD(uint256 priceInUSD) external;
 }
 
+/**
+ * @title XeonHedging Test V3 - hedging logic for PUT, CALL, and SWAP options
+ * @notice this is a testnet version of XeonHedging and should not be used in production
+ * @author Jon Bray <jon@xeon-protocol.io>
+ * @author ByteZero <bytezero@xeon-protocol.io>
+ */
 contract XeonHedging_Test_V3 is ReentrancyGuard, ERC721URIStorage, Ownable {
     using SafeERC20 for IERC20;
 
@@ -179,6 +185,17 @@ contract XeonHedging_Test_V3 is ReentrancyGuard, ERC721URIStorage, Ownable {
         emit HedgeTaken(hedgeId, msg.sender);
     }
 
+    /**
+     * @dev handle the exercise of a CALL or PUT option by the taker before expiry
+     * CALL Option: ensure market value (from oracle) is greater than the strike price
+     * before allowing the taker to exercise the option. Payoff is the collateral amount,
+     * which is transferred to the taker.
+     *
+     * PUT Option: ensure the market value is less than the strike price.
+     * Payoff is the strike price, is transferred to the writer in WETH.
+     *
+     * @param hedgeId token Id of the option
+     */
     function exerciseHedge(uint256 hedgeId) external nonReentrant {
         Hedge storage hedge = hedges[hedgeId];
         require(hedge.taker == msg.sender, "Only the taker can exercise this hedge");
@@ -188,24 +205,17 @@ contract XeonHedging_Test_V3 is ReentrancyGuard, ERC721URIStorage, Ownable {
         uint256 payoff;
 
         if (hedge.hedgeType == HedgeType.CALL) {
-            require(
-                IERC20(hedge.collateralToken).balanceOf(msg.sender) >= hedge.strikePrice,
-                "Insufficient balance to exercise"
-            );
+            uint256 currentValue = IPriceOracle(priceOracleAddress).getValueInWETH(hedge.collateralToken);
+            require(currentValue > hedge.strikePrice, "Strike price must be less than market value to exercise");
+
             payoff = hedge.collateralAmount; // Payoff in underlying asset
             IERC20(hedge.collateralToken).safeTransfer(hedge.taker, payoff);
         } else if (hedge.hedgeType == HedgeType.PUT) {
-            payoff = hedge.strikePrice; // Payoff in quote currency
-            IWETH(wethAddress).transfer(hedge.writer, payoff);
-        } else if (hedge.hedgeType == HedgeType.SWAP) {
             uint256 currentValue = IPriceOracle(priceOracleAddress).getValueInWETH(hedge.collateralToken);
-            if (currentValue > hedge.strikePrice) {
-                payoff = currentValue - hedge.strikePrice;
-                IERC20(hedge.collateralToken).safeTransfer(hedge.taker, payoff);
-            } else {
-                payoff = hedge.strikePrice - currentValue;
-                IWETH(wethAddress).transfer(hedge.writer, payoff);
-            }
+            require(currentValue < hedge.strikePrice, "Strike price must be greater than market value to exercise");
+
+            payoff = hedge.strikePrice; // Payoff in paired currency
+            IWETH(wethAddress).transfer(hedge.writer, payoff);
         }
 
         hedge.isExercised = true;
@@ -213,14 +223,46 @@ contract XeonHedging_Test_V3 is ReentrancyGuard, ERC721URIStorage, Ownable {
         emit HedgeExercised(hedgeId, msg.sender, payoff);
     }
 
+    /**
+     * @dev handle settlement of a hedge after expiry. For PUT and CALL options,
+     * only the staking pool or taker can settle.
+     *
+     * CALL/PUT options: these can only be settled by the staking pool or taker
+     * after expiry. if the option was not exercised, the collateral is returned
+     * to the writer.
+     *
+     * SWAP: calculate the payoff based on the difference between the market
+     * value and strike price. if the collateral is insufficient to pay the winner,
+     * all available collateral is paid.
+     *
+     * @param hedgeId token Id of the option
+     */
     function settleHedge(uint256 hedgeId) external nonReentrant {
         Hedge storage hedge = hedges[hedgeId];
         require(block.timestamp >= hedge.expiry, "Hedge not expired");
         require(!hedge.isSettled, "Hedge already settled");
 
-        if (!hedge.isExercised && hedge.hedgeType != HedgeType.SWAP) {
-            // Return collateral to the writer
-            IERC20(hedge.collateralToken).safeTransfer(hedge.writer, hedge.collateralAmount);
+        uint256 payoff;
+
+        if (hedge.hedgeType == HedgeType.SWAP) {
+            uint256 currentValue = IPriceOracle(priceOracleAddress).getValueInWETH(hedge.collateralToken);
+
+            if (currentValue > hedge.strikePrice) {
+                payoff = currentValue - hedge.strikePrice;
+                IERC20(hedge.collateralToken).safeTransfer(hedge.taker, payoff);
+            } else {
+                payoff = hedge.strikePrice - currentValue;
+                uint256 collateralAvailable = IERC20(hedge.collateralToken).balanceOf(address(this));
+                uint256 payout = (collateralAvailable >= payoff) ? payoff : collateralAvailable;
+                IWETH(wethAddress).transfer(hedge.writer, payout);
+            }
+        } else {
+            require(msg.sender == hedge.taker || msg.sender == stakingPoolAddress, "Unauthorized to settle hedge");
+
+            if (!hedge.isExercised) {
+                uint256 collateralAmount = hedge.collateralAmount;
+                IERC20(hedge.collateralToken).safeTransfer(hedge.writer, collateralAmount);
+            }
         }
 
         hedge.isSettled = true;
@@ -228,12 +270,22 @@ contract XeonHedging_Test_V3 is ReentrancyGuard, ERC721URIStorage, Ownable {
         emit HedgeSettled(hedgeId, hedge.writer, hedge.taker);
     }
 
+    /**
+     * @dev handle the deletion of expired and unexercised hedges
+     *
+     * this function checks if the hedge has expired and wasn't exercised.
+     * if the staking pool deletes the hedge, a fee is deducted before returning
+     * the collateral to the writer. if the writer deletes it, they receive the full
+     * collateral.
+     *
+     * @param hedgeId token Id of the option
+     */
     function deleteExpiredHedge(uint256 hedgeId) external nonReentrant {
         Hedge storage hedge = hedges[hedgeId];
         require(block.timestamp >= hedge.expiry, "Hedge not expired");
         require(!hedge.isSettled, "Hedge already settled");
 
-        if (hedge.taker == address(0)) {
+        if (!hedge.isExercised && hedge.taker == address(0)) {
             // If staking pool is closing the hedge, apply a 1% fee to the writer
             if (msg.sender == stakingPoolAddress) {
                 uint256 closureFee = (hedge.collateralAmount * purchaseFeeNumerator) / feeDenominator;
