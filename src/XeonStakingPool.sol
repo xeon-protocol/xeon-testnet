@@ -164,7 +164,10 @@ contract XeonStakingPool is ERC20, Ownable {
     function _unlockPool() internal {
         isPoolLocked = false;
         nextEpochStart = block.timestamp + UNLOCK_PERIOD;
-        autoWithdrawRewards(); // Distribute rewards at the start of the new epoch
+
+        autoWithdrawRewards(); // distribute rewards
+        _swapWETHForXEON(); // swap WETH to XEON
+
         emit PoolUnlocked(epoch, block.timestamp);
     }
 
