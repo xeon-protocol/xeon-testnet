@@ -43,6 +43,11 @@ contract XeonStakingPool is ERC20, Ownable {
     mapping(address => uint256) public stakedAmounts; // Amount of XEON staked by users
     mapping(address => uint256) public stakerPercentage; // Percentage of pool owned by each staker
 
+    //========== VOTING VARIABLES==========//
+    mapping(address => uint256) public votes;
+    uint256 public totalVotes; // total votes cast
+    uint256 public totalWeight; // total weight of votes
+
     //========== EVENTS ==========//
     event Staked(address indexed user, uint256 amount);
     event Unstaked(address indexed user, uint256 amount);
@@ -149,11 +154,16 @@ contract XeonStakingPool is ERC20, Ownable {
     }
 
     /**
-     * @dev Internal function to lock the pool and start a new epoch
+     * @dev Internal function to lock the pool and start a new epoch.
+     * when locking the pool, the buyback percentage is recalculated.
      */
     function _lockPool() internal {
         isPoolLocked = true;
         epoch++;
+
+        // calculate the new buyback percentage
+        _calculateNewBuybackPercentage();
+
         nextEpochStart = block.timestamp + EPOCH_DURATION;
         emit PoolLocked(epoch, block.timestamp);
     }
@@ -230,6 +240,33 @@ contract XeonStakingPool is ERC20, Ownable {
         emit TokenSwapped(token, amount, amounts[1]);
     }
 
+    //========== POOL VOTING ==========//
+    /**
+     * @notice cast a vote for what percentage of pool rewards should be used
+     * to buyback XEON from the LP.
+     * @dev Only stakers can call this function, and votes are weighted by
+     * total amount of XEON staked.
+     *
+     * @param percentage of XEON buyback being voted for (1-100)
+     */
+    function voteForBuybackPercentage(uint256 percentage) external isStaker {
+        require(!isPoolLocked, "Voting is only allowed while the pool is unlocked");
+        require(percentage >= 1 && percentage <= 100, "Invalid percentage");
+
+        uint256 weight = stakerPercentage[msg.sender];
+
+        // remove the staker's previous vote (if any)
+        if (votes[msg.sender] > 0) {
+            totalVotes -= votes[msg.sender] * weight;
+            totalWeight -= weight;
+        }
+
+        // record the new vote
+        votes[msg.sender] = percentage;
+        totalVotes += percentage * weight;
+        totalWeight += weight;
+    }
+
     //========== INTERNAL FUNCTIONS ==========//
 
     /**
@@ -242,6 +279,24 @@ contract XeonStakingPool is ERC20, Ownable {
             stakerPercentage[staker] = (stakedAmounts[staker] * 100) / totalStaked;
         } else {
             stakerPercentage[staker] = 0;
+        }
+    }
+
+    /**
+     * @dev internal function to calculate the new buyback percentage
+     * the previous buyback percentage is weighted in as 50% of the new percentage
+     */
+    function _calculateNewBuybackPercentage() internal {
+        if (totalWeight > 0) {
+            uint256 newPercentage = (totalVotes / totalWeight);
+            buyBackPercentage = (newPercentage + (buyBackPercentage * 50) / 100) / 2;
+        }
+
+        // Reset voting data for the next epoch
+        totalVotes = 0;
+        totalWeight = 0;
+        for (uint256 i = 0; i < stakers.length; i++) {
+            votes[stakers[i]] = 0;
         }
     }
 
