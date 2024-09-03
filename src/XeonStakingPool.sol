@@ -253,18 +253,18 @@ contract XeonStakingPool is ERC20, Ownable {
         require(!isPoolLocked, "Voting is only allowed while the pool is unlocked");
         require(percentage >= 1 && percentage <= 100, "Invalid percentage");
 
-        uint256 weight = stakerPercentage[msg.sender];
+        uint256 stakedBalance = balanceOf(msg.sender);
+        uint256 totalStaked = totalSupply();
+        uint256 weightedVote = (percentage * stakedBalance) / totalStaked;
 
-        // remove the staker's previous vote (if any)
+        // Remove the user's previous vote from the total votes
         if (votes[msg.sender] > 0) {
-            totalVotes -= votes[msg.sender] * weight;
-            totalWeight -= weight;
+            totalVotes -= votes[msg.sender];
         }
 
-        // record the new vote
-        votes[msg.sender] = percentage;
-        totalVotes += percentage * weight;
-        totalWeight += weight;
+        // Add the new vote to the total votes
+        votes[msg.sender] = weightedVote;
+        totalVotes += weightedVote;
     }
 
     //========== INTERNAL FUNCTIONS ==========//
@@ -284,17 +284,22 @@ contract XeonStakingPool is ERC20, Ownable {
 
     /**
      * @dev internal function to calculate the new buyback percentage
-     * the previous buyback percentage is weighted in as 50% of the new percentage
+     * each staker's vote is proportional to the amount of XEON staked, relative
+     * to the total amount staked. The previous buyback percentage is weighted
+     * in to dampen percentage change between epochs.
      */
     function _calculateNewBuybackPercentage() internal {
-        if (totalWeight > 0) {
-            uint256 newPercentage = (totalVotes / totalWeight);
-            buyBackPercentage = (newPercentage + (buyBackPercentage * 50) / 100) / 2;
+        uint256 totalStaked = totalSupply();
+        if (totalStaked > 0) {
+            // calculate the weighted average of the votes
+            uint256 weightedAverage = (totalVotes * 100) / totalStaked;
+
+            // dampen adjustment with previous buyback percentage
+            buyBackPercentage = (weightedAverage + buyBackPercentage) / 2;
         }
 
         // Reset voting data for the next epoch
         totalVotes = 0;
-        totalWeight = 0;
         for (uint256 i = 0; i < stakers.length; i++) {
             votes[stakers[i]] = 0;
         }
