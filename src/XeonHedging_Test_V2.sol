@@ -5,9 +5,9 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "./PriceOracle.sol";
-import "./XeonFeeManagement.sol";
-import "./XeonStorage.sol";
-import "./XeonStructs.sol";
+import "./types/XeonFeeManagement.sol";
+import "./types/XeonStorage.sol";
+import "./types/XeonStructs.sol";
 
 interface IPriceOracle {
     function getValueInWETH(address token) external view returns (uint256);
