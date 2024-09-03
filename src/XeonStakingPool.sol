@@ -5,6 +5,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
 import "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
 
@@ -16,40 +17,36 @@ import "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
  * @notice This is a testnet version of XeonStaking and should not be used in production.
  * @author Jon Bray <jon@xeon-protocol.io>
  */
-contract XeonStakingPool is ERC20, Ownable {
+contract XeonStakingPool is ERC20, Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     //========== ADDRESS VARIABLES ==========//
     IERC20 public immutable XEON;
-    IWETH public immutable WETH;
+    IERC20 public immutable WETH;
     address public teamAddress;
-    // destination for XEON tokens bought through the pool
-    address public constant buybackDestination = teamAddress;
+    address[] public stakers;
 
-    IUniswapV2Router02 public immutable uniswapV2Router; // Uniswap V2 Router
-    ISwapRouter public immutable uniswapV3Router; // Uniswap V3 Router
+    IUniswapV2Router02 public immutable uniswapV2Router;
+    ISwapRouter public immutable uniswapV3Router;
 
-    //========== EPOCH CONSTANTS ==========//
-    uint256 public epoch = 1; // skip epoch 0
+    //========== EPOCH VARIABLES ==========//
     /* todo: update constants for mainnet */
-    uint256 public constant EPOCH_DURATION = 3 days; // mainnet: 30 days
-    uint256 public constant UNLOCK_PERIOD = 2 days; // mainnet: 3 days
-    uint256 public nextEpochStart;
+    uint64 public nextEpochStart;
+    uint64 public constant EPOCH_DURATION = 3 days; // mainnet: 30 days
+    uint64 public constant UNLOCK_PERIOD = 2 days; // mainnet: 3 days
+    uint128 public epoch = 1; // skip epoch 0
     bool public isPoolLocked;
 
-    //========== REWARD DISTRIBUTION CONSTANTS ==========//
-    // percentage of rewards paid to the team
-    uint256 public teamPercentage = 5;
-    // percentage of rewards used to buyback XEON
-    uint256 public constant buyBackPercentage = 5;
+    //========== REWARD VARIABLES ==========//
+    uint8 public teamPercentage = 5;
+    uint8 public buyBackPercentage = 5;
 
     //========== MAPPINGS ==========//
     // total amount of XEON staked by users
     mapping(address => uint256) public stakedAmounts;
     // percentage of the pool owned by each staker
     mapping(address => uint256) public stakerPercentage;
-
-    //========== VOTING VARIABLES==========//
+    // votes for each staker
     mapping(address => uint256) public votes;
     // sum of all weighted votes
     uint256 public totalVotes;
@@ -73,11 +70,11 @@ contract XeonStakingPool is ERC20, Ownable {
      */
     constructor(
         IERC20 _XEON,
-        IWETH _WETH,
+        IERC20 _WETH,
         IUniswapV2Router02 _uniswapV2Router,
         ISwapRouter _uniswapV3Router,
         address _teamAddress
-    ) ERC20("Staked XEON", "stXEON") {
+    ) ERC20("Staked XEON", "stXEON") Ownable(msg.sender) {
         XEON = _XEON;
         WETH = _WETH;
         uniswapV2Router = _uniswapV2Router;
@@ -85,7 +82,7 @@ contract XeonStakingPool is ERC20, Ownable {
         teamAddress = _teamAddress;
 
         isPoolLocked = false; // Start in an unlocked state
-        nextEpochStart = block.timestamp + EPOCH_DURATION;
+        nextEpochStart = uint64(block.timestamp) + EPOCH_DURATION;
     }
 
     //========== MODIFIERS ==========//
@@ -127,9 +124,13 @@ contract XeonStakingPool is ERC20, Ownable {
         XEON.safeTransferFrom(msg.sender, address(this), amount);
         _mint(msg.sender, amount);
 
+        if (stakedAmounts[msg.sender] == 0) {
+            stakers.push(msg.sender);
+        }
+
         stakedAmounts[msg.sender] += amount;
 
-        // Update staker's percentage in the pool
+        // update staker's percentage of the pool
         _updateStakerPercentage(msg.sender);
 
         emit Staked(msg.sender, amount);
@@ -147,7 +148,11 @@ contract XeonStakingPool is ERC20, Ownable {
         _burn(msg.sender, amount);
         stakedAmounts[msg.sender] -= amount;
 
-        // Update staker's percentage in the pool
+        if (stakedAmounts[msg.sender] == 0) {
+            _removeStaker(msg.sender);
+        }
+
+        // update staker's percentage of the pool
         _updateStakerPercentage(msg.sender);
 
         XEON.safeTransfer(msg.sender, amount);
@@ -181,7 +186,7 @@ contract XeonStakingPool is ERC20, Ownable {
         _calculateNewBuybackPercentage();
 
         // next epoch starts after this epoch and next unlock period
-        nextEpochStart = block.timestamp + EPOCH_DURATION + UNLOCK_PERIOD;
+        nextEpochStart = uint64(block.timestamp) + EPOCH_DURATION + UNLOCK_PERIOD;
         epoch++;
 
         emit PoolLocked(epoch, block.timestamp);
@@ -194,10 +199,10 @@ contract XeonStakingPool is ERC20, Ownable {
         isPoolLocked = false;
 
         // next epoch starts after this current unlock period
-        nextEpochStart = block.timestamp + UNLOCK_PERIOD;
+        nextEpochStart = uint64(block.timestamp) + UNLOCK_PERIOD;
 
         // distribute rewards and buyback XEON
-        autoWithdrawRewards();
+        _autoWithdrawRewards();
         _swapWETHForXEON();
 
         emit PoolUnlocked(epoch, block.timestamp);
@@ -208,7 +213,7 @@ contract XeonStakingPool is ERC20, Ownable {
     /**
      * @dev Internal function to distribute WETH rewards to the team, buyback, and stakers
      */
-    function autoWithdrawRewards() internal {
+    function _autoWithdrawRewards() internal nonReentrant {
         uint256 totalWETH = WETH.balanceOf(address(this));
         uint256 teamReward = (totalWETH * teamPercentage) / 100;
         uint256 buyBackAmount = (totalWETH * buyBackPercentage) / 100;
@@ -216,13 +221,14 @@ contract XeonStakingPool is ERC20, Ownable {
 
         // Distribute WETH
         WETH.transfer(teamAddress, teamReward);
-        WETH.transfer(buybackDestination, buyBackAmount);
+        WETH.transfer(teamAddress, buyBackAmount);
 
         // Distribute to stakers
-        uint256 totalSupply = totalSupply();
-        for (uint256 i = 0; i < stakers.length; i++) {
+        uint256 totalStakedSupply = totalSupply(); // Renamed variable to avoid shadowing
+        uint256 stakersLength = stakers.length;
+        for (uint256 i = 0; i < stakersLength; i++) {
             address staker = stakers[i];
-            uint256 reward = (stakedAmounts[staker] * stakersReward) / totalSupply;
+            uint256 reward = (stakedAmounts[staker] * stakersReward) / totalStakedSupply;
             WETH.transfer(staker, reward);
         }
 
@@ -233,7 +239,7 @@ contract XeonStakingPool is ERC20, Ownable {
      * @notice Allows the owner to trigger rewards distribution at any time
      */
     function withdrawRewards() external onlyOwner {
-        autoWithdrawRewards();
+        _autoWithdrawRewards();
     }
 
     /**
@@ -335,12 +341,27 @@ contract XeonStakingPool is ERC20, Ownable {
 
         // Calculate the new buyback percentage
         uint256 weightedAverage = totalWeightedVotes / totalStaked;
-        buyBackPercentage = (weightedAverage + buyBackPercentage) / 2;
+        buyBackPercentage = uint8((weightedAverage + uint256(buyBackPercentage)) / 2);
 
         // Reset votes for the next epoch
         totalVotes = 0;
         for (uint256 i = 0; i < stakers.length; i++) {
             votes[stakers[i]] = 0;
+        }
+    }
+
+    /**
+     * @dev internal function to remove a staker if they are no longer staked
+     * @param staker address of the staker
+     */
+    function _removeStaker(address staker) internal {
+        uint256 length = stakers.length;
+        for (uint256 i = 0; i < length; i++) {
+            if (stakers[i] == staker) {
+                stakers[i] = stakers[length - 1];
+                stakers.pop();
+                break;
+            }
         }
     }
 
@@ -354,7 +375,8 @@ contract XeonStakingPool is ERC20, Ownable {
         // Approve the Uniswap router to spend WETH
         WETH.approve(address(uniswapV2Router), amountToSwap);
 
-        address;
+        // Define the path for swapping WETH to XEON
+        address[] memory path = new address[](2);
         path[0] = address(WETH);
         path[1] = address(XEON);
 
@@ -363,8 +385,8 @@ contract XeonStakingPool is ERC20, Ownable {
             amountToSwap,
             0, // Accept any amount of XEON
             path,
-            teamAddress,
-            block.timestamp
+            address(this), // Send XEON to this contract
+            block.timestamp + 15 minutes // Set a reasonable deadline
         );
 
         emit TokenSwapped(address(WETH), amountToSwap, amounts[1]);
@@ -378,7 +400,7 @@ contract XeonStakingPool is ERC20, Ownable {
      */
     function setTeamPercentage(uint256 newPercentage) external onlyOwner {
         require(newPercentage < 100, "Percentage must be less than 100");
-        teamPercentage = newPercentage;
+        teamPercentage = uint8(newPercentage);
         emit TeamPercentageUpdated(newPercentage);
     }
 }
