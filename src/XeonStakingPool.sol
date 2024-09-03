@@ -59,6 +59,7 @@ contract XeonStakingPool is ERC20, Ownable, ReentrancyGuard {
     event PoolLocked(uint256 epoch, uint256 timestamp);
     event PoolUnlocked(uint256 epoch, uint256 timestamp);
     event TeamPercentageUpdated(uint256 newPercentage);
+    event PoolLockToggled(bool isLocked, uint256 timestamp);
 
     /**
      * @notice constructor to initialize the staking pool
@@ -69,11 +70,11 @@ contract XeonStakingPool is ERC20, Ownable, ReentrancyGuard {
      * @param _teamAddress address of the team ecosystem multisig
      */
     constructor(
-        IERC20 _XEON,
-        IERC20 _WETH,
-        IUniswapV2Router02 _uniswapV2Router,
-        ISwapRouter _uniswapV3Router,
-        address _teamAddress
+        IERC20 _XEON, // base sepolia: 0x296dBB55cbA3c9beA7A8ac171542bEEf2ceD1163
+        IERC20 _WETH, // base sepolia: 0x395cB7753B02A15ed1C099DFc36bF00171F18218
+        IUniswapV2Router02 _uniswapV2Router, // base sepolia: 0x1689E7B1F10000AE47eBfE339a4f69dECd19F602
+        ISwapRouter _uniswapV3Router, // base sepolia: 0x94cC0AaC535CCDB3C01d6787D6413C739ae12bc4
+        address _teamAddress // base sepolia: 0x56557c3266d11541c2D939BF6C05BFD29e881e55
     ) ERC20("Staked XEON", "stXEON") Ownable(msg.sender) {
         XEON = _XEON;
         WETH = _WETH;
@@ -420,5 +421,20 @@ contract XeonStakingPool is ERC20, Ownable, ReentrancyGuard {
     function updateWETHAddress(IERC20 _newWETH) external onlyOwner {
         require(address(_newWETH) != address(0), "Invalid address");
         WETH = _newWETH;
+    }
+
+    /**
+     * @notice function for owner to toggle the pool lock state
+     */
+    function togglePoolLock() external onlyOwner {
+        isPoolLocked = !isPoolLocked;
+
+        if (isPoolLocked) {
+            emit PoolLocked(epoch, block.timestamp);
+        } else {
+            emit PoolUnlocked(epoch, block.timestamp);
+        }
+
+        emit PoolLockToggled(isPoolLocked, block.timestamp);
     }
 }
