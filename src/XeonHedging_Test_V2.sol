@@ -1,19 +1,19 @@
-// SPDX-License-Identifier: GPL-3.0
-pragma solidity ^0.8.20;
+// SPDX-License-Identifier: BUSL-1.1
+pragma solidity 0.8.20;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "@uniswap/v2-core/contracts/interfaces/IUniswapV2Factory.sol";
 import "./PriceOracle.sol";
+import "./XeonFeeManagement.sol";
+import "./XeonStorage.sol";
+import "./XeonStructs.sol";
 
 interface IPriceOracle {
     function getValueInWETH(address token) external view returns (uint256);
     function setTokenPriceInWETH(address token, uint256 priceInWETH) external;
     function setWETHPriceInUSD(uint256 priceInUSD) external;
 }
-
-pragma solidity ^0.8.20;
 
 interface IXeonStaking {
     function getAssignedAndUnassignedAmounts(address _addr)
@@ -28,199 +28,38 @@ interface IXeonStaking {
  * @author Jon Bray <jon@xeon-protocol.io>
  * @notice this is a testnet version of XeonHedging and should not be used in production
  */
-contract XeonHedging_Test_V1 is Ownable, ReentrancyGuard {
-    // contract XeonHedging is Ownable, ReentrancyGuard {
+contract XeonHedging_Test_V2 is Ownable, ReentrancyGuard {
+    /**
+     * todo: simplify underlying value calcs
+     * change ALL underlying value references to use WETH
+     * and rename to generic "underlyingValue" where possible
+     * need to start from basics
+     */
+
+    /**
+     * todo: break up hedging logic
+     * instead of treating all hedges as one, have a separate
+     * function for put/call/swap
+     *
+     * use structs only for what's common among all of them
+     * use local variables for everything else
+     */
     using SafeERC20 for IERC20;
 
-    //=============== STATE VARIABLES ===============//
     bool private isExecuting;
     bool private isAdmin;
 
-    // all deals
-    uint256[] private optionsCreated;
-    uint256[] private equityswapsCreated;
-    uint256[] private optionsTaken;
-    uint256[] private equityswapsTaken;
-
-    // global counters
-    uint256 public depositedTokensLength;
-    uint256 public optionsCreatedLength;
-    uint256 public equityswapsCreatedLength;
-    uint256 public equityswapsTakenLength;
-    uint256 public optionsTakenLength;
-    uint256 public dealID;
-    uint256 public topupRequestID;
-    uint256 public settledTradesCount;
-    uint256 public miners;
-
-    // fee variables
-    uint256 public feeNumerator;
-    uint256 public feeDenominator;
-    uint256 public protocolFeeRate;
-    uint256 public validatorFeeRate;
-
-    // token deposits equiv in paired currencies
-    uint256 public wethEquivDeposits;
-    // hack: testnet does not utilize USDT, USDC
-
-    // token withdrawal equiv in paired currencies
-    uint256 public wethEquivWithdrawals;
-    // hack: testnet does not utilize USDT, USDC
-
     // core addresses
-    IUniswapV2Factory public uniswapV2Factory;
-    // IUniswapV3Factory public uniswapV3Factory; // not needed in testnet deployment
-    IXeonStaking public stakingContract;
     address public priceOracle;
+    IXeonStaking public stakingContract;
+
     address public xeonAddress;
     address public stakingAddress;
     address public wethAddress;
-    // hack: testnet does not utilize USDT, USDC
-    // address public usdtAddress;
-    // address public usdcAddress;
-
-    //=============== STRUCTS ===============//
-    struct UserBalance {
-        uint256 deposited;
-        uint256 withdrawn;
-        uint256 lockedInUse;
-    }
-
-    struct ContractBalance {
-        uint256 deposited;
-        uint256 withdrawn;
-    }
-
-    struct HedgeInfo {
-        uint256 underlyingValue;
-        uint256 payOff;
-        uint256 priceNow;
-        uint256 tokensDue;
-        uint256 tokenFee;
-        uint256 pairedFee;
-        bool marketOverStart;
-        bool isBelowStrikeValue;
-        bool newAddressFlag;
-    }
-
-    struct PairInfo {
-        address pairAddress;
-        address pairedCurrency;
-        IERC20 token0;
-        IERC20 token1;
-        uint112 reserve0;
-        uint112 reserve1;
-        uint256 token0Decimals;
-        uint256 token1Decimals;
-    }
-
-    struct HedgingOption {
-        bool zapTaker;
-        bool zapWriter;
-        address owner;
-        address taker;
-        address token;
-        address paired;
-        uint256 status; //0 - none, 1 - created, 2 - taken, 3 - settled
-        uint256 amount;
-        uint256 createValue;
-        uint256 startValue;
-        uint256 strikeValue;
-        uint256 endValue;
-        uint256 cost;
-        uint256 dt_created;
-        uint256 dt_started;
-        uint256 dt_expiry;
-        uint256 dt_settled;
-        HedgeType hedgeType;
-        uint256[] topupRequests;
-    }
-
-    struct UserPL {
-        uint256 profits;
-        uint256 losses;
-    }
-
-    struct TopupData {
-        address requester;
-        uint256 amountWriter;
-        uint256 amountTaker;
-        uint256 requestTime;
-        uint256 acceptTime;
-        uint256 rejectTime;
-        uint256 state; // 0 - requested, 1 accepted, 2 rejected
-    }
-
-    enum HedgeType {
-        CALL,
-        PUT,
-        SWAP
-    }
+    address public usdtAddress;
+    address public usdcAddress;
 
     //=============== MAPPINGS ===============//
-    // mapping of wallet token balances [token][user]
-    mapping(address => mapping(address => UserBalance)) public userBalanceMap;
-
-    //mapping of user-hedge-Ids array for each erc20 token
-    mapping(address => mapping(address => uint256[])) private userHedgesForTokenMap;
-
-    // mapping of wallet profit & loss [pair][user]
-    mapping(address => mapping(address => UserPL)) private userPLMap;
-
-    // track all erc20 deposits and withdrawals to contract
-    mapping(address => ContractBalance) public protocolBalanceMap;
-
-    // mapping of all hedge storages by Id
-    mapping(uint256 => HedgingOption) private hedgeMap;
-
-    // mapping topup requests
-    mapping(uint256 => TopupData) public topupMap;
-
-    // mapping of all deals created for each erc20
-    mapping(address => uint256[]) private tokenOptions;
-    mapping(address => uint256[]) private tokenSwaps;
-
-    // mapping of all deals taken for each erc20
-    mapping(address => uint256[]) private optionsBought;
-    mapping(address => uint256[]) private equityswapsBought;
-
-    // mapping of all deals settled for each erc20
-    mapping(address => uint256[]) private optionsSettled;
-    mapping(address => uint256[]) private equityswapsSettled;
-
-    // mapping of all deals for user by Id
-    mapping(address => uint256[]) public myoptionsCreated;
-    mapping(address => uint256[]) public myoptionsTaken;
-    mapping(address => uint256[]) public myswapsCreated;
-    mapping(address => uint256[]) public myswapsTaken;
-
-    // mapping of all tokens transacted by user
-    mapping(address => address[]) public userERC20s;
-    mapping(address => address[]) public pairedERC20s;
-
-    // mapping of all protocol profits and fees collected from deals
-    mapping(address => uint256) public protocolProfitsTokens; //liquidated to paired at discount
-    mapping(address => uint256) public protocolPairProfits;
-    mapping(address => uint256) public protocolFeesTokens; //liquidated to paired at discount
-    mapping(address => uint256) public protocolPairedFees;
-    mapping(address => uint256) public hedgesCreatedVolume; //volume saved in paired currency
-    mapping(address => uint256) public hedgesTakenVolume;
-    mapping(address => uint256) public hedgesCostVolume;
-    mapping(address => uint256) public swapsVolume;
-    mapping(address => uint256) public optionsVolume;
-    mapping(address => uint256) public settledVolume;
-
-    // volume mappings
-    mapping(address => uint256) public protocolCashierFees;
-    mapping(address => mapping(address => uint256)) public equivUserHedged;
-    mapping(address => mapping(address => uint256)) public equivUserCosts;
-
-    // miner mappings
-    mapping(address => bool) public minerMap;
-
-    // mapping bookmarks of each user
-    mapping(address => mapping(uint256 => bool)) public bookmarks;
-    mapping(address => uint256[]) public bookmarkedOptions;
 
     //=============== EVENTS ===============//
     event Received(address, uint256);
@@ -244,7 +83,6 @@ contract XeonHedging_Test_V1 is Ownable, ReentrancyGuard {
         uint256 tokenFee,
         uint256 pairFee
     );
-    event BookmarkToggle(address indexed user, uint256 hedgeId, bool bookmarked);
     event TopupRequested(address indexed party, uint256 indexed hedgeId, uint256 topupAmount);
     event TopupAccepted(
         address indexed acceptor, uint256 indexed dealID, uint256 indexed requestID, uint256 pairedAmount
@@ -252,8 +90,7 @@ contract XeonHedging_Test_V1 is Ownable, ReentrancyGuard {
     event ZapRequested(uint256 indexed hedgeId, address indexed party);
     event HedgeDeleted(uint256 indexed dealID, address indexed deletedBy);
     event FeesTransferred(address indexed token, address indexed to, uint256 amount);
-    event ValidatorFeeUpdated(uint256 protocolFeeRate, uint256 validatorFeeRate);
-    event FeeUpdated(uint256 feeNumerator, uint256 feeDenominator);
+
     event EtherWithdrawn(address indexed to, uint256 amount);
 
     /**
@@ -275,6 +112,11 @@ contract XeonHedging_Test_V1 is Ownable, ReentrancyGuard {
     }
 
     //=============== SETTERS ===============//
+
+    /* todo: be able to update and set: */
+    // - PriceOracle
+    // - XeonStaking
+    // - ensure updating admin/owner works
 
     //=============== GETTERS ===============//
     // hack: workaround for getting token decimals through IERC20 interface
@@ -643,6 +485,7 @@ contract XeonHedging_Test_V1 is Ownable, ReentrancyGuard {
     }
 
     /**
+     * todo: incorporate into vault logic
      * @dev Transfers collected fees from the protocol to a specified wallet address.
      * This function debits the protocol's user balance map and credits the recipient's user balance map.
      *
@@ -1350,36 +1193,6 @@ contract XeonHedging_Test_V1 is Ownable, ReentrancyGuard {
         emit MinedHedge(_dealID, msg.sender, option.token, option.paired, hedgeInfo.tokenFee, hedgeInfo.pairedFee);
     }
 
-    /**
-     * @notice Updates the protocol fee.
-     *
-     * This function updates the numerator and denominator of the protocol fee.
-     *
-     * @param numerator The new numerator of the fee.
-     * @param denominator The new denominator of the fee.
-     */
-    function updateFee(uint256 numerator, uint256 denominator) external onlyOwner {
-        feeNumerator = numerator;
-        feeDenominator = denominator;
-        emit FeeUpdated(numerator, denominator);
-    }
-
-    /**
-     * @notice Updates the validator fee.
-     *
-     * This function updates the validator fee as a pecentage
-     *
-     * @param protocolPercent The percentage amount of protocol fee.
-     * @param validatorPercent The percentage amount of validator fee.
-     */
-    function updateValidatorFee(uint256 protocolPercent, uint256 validatorPercent) external onlyOwner {
-        // check that protocolFeeRate + validatorFeeRate == 100
-        require(protocolPercent + validatorPercent == 100, "Total fee rate must be 100");
-        protocolFeeRate = protocolPercent;
-        validatorFeeRate = validatorPercent;
-        emit ValidatorFeeUpdated(protocolFeeRate, validatorFeeRate);
-    }
-
     //=============== INTERNAL METHODS ===============//
     /**
      * @notice Logs mining data when a trade settles.
@@ -1441,52 +1254,6 @@ contract XeonHedging_Test_V1 is Ownable, ReentrancyGuard {
         }
     }
 
-    /**
-     * @notice Calculates the fee based on the given amount.
-     *
-     * This function calculates the fee based on the given amount and the fee numerator and denominator.
-     *
-     * @param amount The amount for which the fee is calculated.
-     * @return The calculated fee amount.
-     */
-    function calculateFee(uint256 amount) public view returns (uint256) {
-        require(amount >= feeDenominator, "Revenue is too small");
-        uint256 amountInLarge = amount * (feeDenominator - feeNumerator);
-        uint256 amountIn = amountInLarge / feeDenominator;
-        uint256 fee = amount - amountIn;
-        return fee;
-    }
-
-    /**
-     * @notice Toggles the bookmark status of a hedging option using its ID.
-     *
-     * This function toggles the bookmark status of a hedging option based on its ID for the caller.
-     * It emits an event indicating the toggle action.
-     *
-     * @param _dealID The unique identifier of the hedging option.
-     */
-    function bookmarkHedge(uint256 _dealID) external {
-        bool bookmarked = bookmarks[msg.sender][_dealID];
-        bookmarks[msg.sender][_dealID] = !bookmarked;
-        emit BookmarkToggle(msg.sender, _dealID, !bookmarked);
-        // Update bookmarkedOptions array for wallet
-        if (!bookmarked) {
-            bookmarkedOptions[msg.sender].push(_dealID);
-        } else {
-            uint256[] storage options = bookmarkedOptions[msg.sender];
-            for (uint256 i = 0; i < options.length; i++) {
-                if (options[i] == _dealID) {
-                    // When values match, remove the dealId from array
-                    if (i < options.length - 1) {
-                        options[i] = options[options.length - 1];
-                    }
-                    options.pop();
-                    break;
-                }
-            }
-        }
-    }
-
     //=============== ETHER HANDLING ===============//
     // hack: not needed for testnet, removed to keep contract under size limit (24576)
     // receive() external payable {
@@ -1503,30 +1270,4 @@ contract XeonHedging_Test_V1 is Ownable, ReentrancyGuard {
 
     //     emit EtherWithdrawn(to, amount);
     // }
-
-    //=============== BOOKKEEPING METHODS ===============//
-    /**
-     * @notice Gets the bookmark status of a hedging option for a specific user.
-     *
-     * This function retrieves the bookmark status of a hedging option for a specific user.
-     *
-     * @param user The address of the user.
-     * @param _dealID The unique identifier of the hedging option.
-     * @return The bookmark status.
-     */
-    function getBookmark(address user, uint256 _dealID) public view returns (bool) {
-        return bookmarks[user][_dealID];
-    }
-
-    /**
-     * @notice Gets all bookmarks of a user.
-     *
-     * This function retrieves all bookmarks of a user.
-     *
-     * @param user The address of the user.
-     * @return An array containing all bookmarked hedging option IDs.
-     */
-    function getMyBookmarks(address user) public view returns (uint256[] memory) {
-        return bookmarkedOptions[user];
-    }
 }
