@@ -21,8 +21,8 @@ contract XeonStakingPool is ERC20, Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     //========== ADDRESS VARIABLES ==========//
-    IERC20 public immutable XEON;
-    IERC20 public immutable WETH;
+    IERC20 public XEON;
+    IERC20 public WETH;
     address public teamAddress;
     address[] public stakers;
 
@@ -32,9 +32,9 @@ contract XeonStakingPool is ERC20, Ownable, ReentrancyGuard {
     //========== EPOCH VARIABLES ==========//
     /* todo: update constants for mainnet */
     uint64 public nextEpochStart;
-    uint64 public constant EPOCH_DURATION = 3 days; // mainnet: 30 days
+    uint64 public constant EPOCH_DURATION = 30 days; // mainnet: 30 days
     uint64 public constant UNLOCK_PERIOD = 2 days; // mainnet: 3 days
-    uint128 public epoch = 1; // skip epoch 0
+    uint128 public epoch = 0; // start at 0 if pool starts in unlocked state
     bool public isPoolLocked;
 
     //========== REWARD VARIABLES ==========//
@@ -82,7 +82,7 @@ contract XeonStakingPool is ERC20, Ownable, ReentrancyGuard {
         teamAddress = _teamAddress;
 
         isPoolLocked = false; // Start in an unlocked state
-        nextEpochStart = uint64(block.timestamp) + EPOCH_DURATION;
+        nextEpochStart = uint64(block.timestamp) + UNLOCK_PERIOD; // epoch 1 starts after unlock period
     }
 
     //========== MODIFIERS ==========//
@@ -383,10 +383,10 @@ contract XeonStakingPool is ERC20, Ownable, ReentrancyGuard {
         // Swap WETH for XEON
         uint256[] memory amounts = uniswapV2Router.swapExactTokensForTokens(
             amountToSwap,
-            0, // Accept any amount of XEON
+            0, // accept any amount of XEON
             path,
-            address(this), // Send XEON to this contract
-            block.timestamp + 15 minutes // Set a reasonable deadline
+            address(this), // send XEON to this contract
+            block.timestamp + 5 minutes // set a reasonable deadline
         );
 
         emit TokenSwapped(address(WETH), amountToSwap, amounts[1]);
@@ -402,5 +402,23 @@ contract XeonStakingPool is ERC20, Ownable, ReentrancyGuard {
         require(newPercentage < 100, "Percentage must be less than 100");
         teamPercentage = uint8(newPercentage);
         emit TeamPercentageUpdated(newPercentage);
+    }
+
+    /**
+     * @notice Updates the XEON token address.
+     * @param _newXEON The new address of the XEON token.
+     */
+    function updateXEONAddress(IERC20 _newXEON) external onlyOwner {
+        require(address(_newXEON) != address(0), "Invalid address");
+        XEON = _newXEON;
+    }
+
+    /**
+     * @notice Updates the WETH token address.
+     * @param _newWETH The new address of the WETH token.
+     */
+    function updateWETHAddress(IERC20 _newWETH) external onlyOwner {
+        require(address(_newWETH) != address(0), "Invalid address");
+        WETH = _newWETH;
     }
 }
