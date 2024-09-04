@@ -18,6 +18,7 @@ import "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
  * @author Jon Bray <jon@xeon-protocol.io>
  */
 contract XeonStakingPool is ERC20, Ownable, ReentrancyGuard {
+    /* todo: separate voting logic into XeonVoting contract, which reads staker data from this contract and returns vote results for buyBackPercentage */
     using SafeERC20 for IERC20;
 
     //========== ADDRESS VARIABLES ==========//
@@ -106,10 +107,16 @@ contract XeonStakingPool is ERC20, Ownable, ReentrancyGuard {
         _;
     }
 
+    //========== stXEON OVERRIDES ==========//
     /**
-     * @dev Restricts stXEON transfers. stXEON can only be minted/burned by this contract.
+     * @dev Prevents stXEON tokens from being transferred.
+     * Overrides `transfer` and `transferFrom` to block transfers.
      */
-    function _transfer(address, address, uint256) internal pure override {
+    function transfer(address, uint256) public pure override returns (bool) {
+        revert("stXEON is non-transferable");
+    }
+
+    function transferFrom(address, address, uint256) public pure override returns (bool) {
         revert("stXEON is non-transferable");
     }
 
@@ -248,6 +255,7 @@ contract XeonStakingPool is ERC20, Ownable, ReentrancyGuard {
      * @param token The address of the ERC20 token to swap
      * @param amount The amount of the token to swap
      */
+    /* todo: add ETH handling for mainnet */
     function swapTokenToWETH(address token, uint256 amount) external onlyOwner {
         IERC20(token).safeTransferFrom(msg.sender, address(this), amount);
 
@@ -369,6 +377,7 @@ contract XeonStakingPool is ERC20, Ownable, ReentrancyGuard {
     /**
      * @dev Internal function to swap WETH for XEON and send to team address
      */
+    /* todo: add ETH handling for mainnet */
     function _swapWETHForXEON() internal {
         uint256 totalWETH = WETH.balanceOf(address(this));
         uint256 amountToSwap = (totalWETH * buyBackPercentage) / 100;
@@ -405,6 +414,7 @@ contract XeonStakingPool is ERC20, Ownable, ReentrancyGuard {
         emit TeamPercentageUpdated(newPercentage);
     }
 
+    /* todo: for mainnet consolidate setter methods into `setParams(xeonAddress, wethAddress, uniswapV2Router, uniswapV3Router, teamPercentage)` */
     /**
      * @notice Updates the XEON token address.
      * @param _newXEON The new address of the XEON token.
