@@ -39,3 +39,14 @@ contract DeployStakingPool is Script {
         vm.stopBroadcast();
     }
 }
+
+contract UpdateOwner is Script {
+    address public NEW_OWNER = 0x56557c3266d11541c2D939BF6C05BFD29e881e55;
+    address public XEON_STAKING = 0x949B2156916A63686835DaF66518C22D497bf8B0;
+
+    function run() external {
+        vm.startBroadcast(vm.envUint("DEPLOYER_PRIVATE_KEY"));
+        XeonStakingPool(XEON_STAKING).transferOwnership(NEW_OWNER);
+        vm.stopBroadcast();
+    }
+}
